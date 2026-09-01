@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="description" content="纯前端、纯离线的安全消息交换工具。通过 ECDH 建立共享会话密钥，核对安全码后使用 AES-256-GCM 加密消息。">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; worker-src 'self'">
+  <title>秘密消息</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="site-header">
+      <div>
+        <h1>秘密消息</h1>
+        <p>先和对方建立一次安全连接。连接完成后，后续消息都使用同一把本机会话钥匙加密。</p>
+      </div>
+      <button id="clearAll" class="button secondary" type="button">结束并清空</button>
+    </header>
+
+    <div class="privacy-line">
+      <strong>私钥不会显示在页面上。</strong> 它和建立后的会话钥匙只保存在当前页面的计算内存中；页面刷新、关闭或清空后即失效。
+    </div>
+
+    <nav class="tabs" aria-label="功能">
+      <button class="tab active" type="button" data-tab="connect">建立连接</button>
+      <button class="tab" type="button" data-tab="send">发消息</button>
+      <button class="tab" type="button" data-tab="receive">看消息</button>
+      <button class="tab" type="button" data-tab="about">说明</button>
+    </nav>
+
+    <section class="panel active" data-panel="connect">
+      <header class="panel-title">
+        <h2>先建立安全连接</h2>
+        <p>双方都打开这个页面，各自得到一个连接码。交换连接码后，两边会算出同一把会话钥匙。</p>
+      </header>
+
+      <div class="status-box" id="connectionStatusBox">
+        <strong id="connectionStatusTitle">还没有连接</strong>
+        <span id="connectionStatusText">先把你的连接码发给对方。</span>
+      </div>
+
+      <div class="step-block">
+        <div class="step-title"><span class="step">1</span><div><h3>把你的连接码发给对方</h3><p>这段内容可以通过微信、邮件或其他不受信任的信道发送。它不包含你的私钥。</p></div></div>
+        <textarea id="myConnectionCode" class="code-input compact" readonly spellcheck="false" placeholder="正在生成连接码…"></textarea>
+        <button class="button primary wide" type="button" data-copy="myConnectionCode">复制我的连接码</button>
+      </div>
+
+      <div class="step-block">
+        <div class="step-title"><span class="step">2</span><div><h3>粘贴对方的连接码</h3><p>把对方发给你的整段连接码粘贴进来。</p></div></div>
+        <textarea id="peerConnectionCode" class="code-input compact" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="把对方的连接码完整粘贴在这里"></textarea>
+        <button id="connectBtn" class="button primary wide" type="button">计算共同会话钥匙</button>
+      </div>
+
+      <div class="step-block" id="verifyStep" hidden>
+        <div class="step-title"><span class="step">3</span><div><h3>和对方核对这组数字</h3><p>请通过电话、当面或另一个可信渠道，让对方读出他页面上的数字。两边必须完全一样。</p></div></div>
+        <div class="verification-code" id="verificationCode">----</div>
+        <div class="plain-note">
+          如果数字不同，<strong>不要继续</strong>。这可能意味着连接码被替换，或者你连接了错误的人。
+        </div>
+        <button id="verifyBtn" class="button primary wide" type="button">我已经核对，数字完全一致</button>
+      </div>
+
+      <div class="step-block final-step" id="connectedStep" hidden>
+        <div class="step-title"><span class="step">✓</span><div><h3>安全连接已经建立</h3><p>从现在开始，发出的消息和收到的消息都使用这次连接生成的共享会话钥匙。</p></div></div>
+        <button id="goSendBtn" class="button primary wide" type="button">去发消息</button>
+        <button id="newConnectionBtn" class="button secondary wide" type="button">换一个人，重新建立连接</button>
+      </div>
+    </section>
+
+    <section class="panel" data-panel="send" hidden>
+      <header class="panel-title">
+        <h2>发消息</h2>
+        <p>不再需要粘贴任何公钥或私钥。当前连接的会话钥匙由页面内部直接使用。</p>
+      </header>
+
+      <div class="connection-guard" id="sendGuard">
+        <strong>还不能发送</strong>
+        <span>请先到“建立连接”完成数字核对。</span>
+      </div>
+
+      <div id="sendContent">
+        <label class="field-label" for="plaintext">要发送的秘密</label>
+        <textarea id="plaintext" class="message-input" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="在这里输入秘密内容"></textarea>
+        <div id="plainCount" class="small-text">0 字符</div>
+        <button id="encryptBtn" class="button primary wide" type="button">生成密文</button>
+
+        <div class="result-block output-block">
+          <div class="result-header">
+            <div><h3>把这一整段发给对方</h3><p>它只能由这次已核对的连接打开。</p></div>
+            <button class="button secondary" type="button" data-copy="ciphertext">复制密文</button>
+          </div>
+          <textarea id="ciphertext" class="code-input" readonly spellcheck="false" placeholder="生成后会显示在这里"></textarea>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" data-panel="receive" hidden>
+      <header class="panel-title">
+        <h2>看消息</h2>
+        <p>直接粘贴对方发来的密文。页面会使用当前连接中已经建立的会话钥匙打开它。</p>
+      </header>
+
+      <div class="connection-guard" id="receiveGuard">
+        <strong>还不能打开</strong>
+        <span>请先到“建立连接”完成数字核对。</span>
+      </div>
+
+      <div id="receiveContent">
+        <label class="field-label" for="receivedCiphertext">对方发来的密文</label>
+        <textarea id="receivedCiphertext" class="code-input" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="把对方发来的密文完整粘贴在这里"></textarea>
+        <button id="decryptBtn" class="button primary wide" type="button">打开消息</button>
+
+        <div class="result-block output-block">
+          <div class="result-header">
+            <div><h3>原来的消息</h3><p>如果密文被修改、来自其他连接，或已经重复打开，页面会拒绝。</p></div>
+            <button class="button secondary" type="button" data-copy="decryptedText">复制内容</button>
+          </div>
+          <textarea id="decryptedText" class="message-input" readonly spellcheck="false" placeholder="成功打开后，原文会显示在这里"></textarea>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel prose" data-panel="about" hidden>
+      <h2>完整流程</h2>
+      <ol class="simple-list">
+        <li>双方各自在本机生成一对临时非对称密钥。<strong>私钥不可导出，也不会显示给用户。</strong></li>
+        <li>双方只交换公开连接码。连接码可以经过不受信任的信道。</li>
+        <li>双方使用自己的私钥和对方的公开连接码，在本机通过 ECDH 算出相同的共享秘密。</li>
+        <li>共享秘密经过 HKDF-SHA-256 派生出一把不可导出的 AES-256-GCM 会话钥匙。</li>
+        <li>双方比较由共享秘密和双方连接信息共同派生的核对码。只有用户确认一致后，页面才启用消息加解密。</li>
+        <li>后续所有消息都使用这把会话钥匙加密和解密；不再重复交换私钥、公钥或每条消息的新 RSA 密钥。</li>
+      </ol>
+
+      <h2>为什么一定要核对数字？</h2>
+      <p>单纯在不可信信道中交换公开信息，任何非对称协议都无法凭空知道“这个公开信息到底是不是对方的”。攻击者可以做中间人替换。核对码就是把这个身份确认步骤显式放进流程：真正的两端会得到同样的数字，中间人两边得到的数字不同。</p>
+
+      <h2>页面保存什么？</h2>
+      <p>私钥、共享秘密和会话钥匙只存在当前 Web Worker 的内存中，不写入 localStorage、sessionStorage、IndexedDB、Cookie 或 Service Worker。刷新、关闭页面、点击“结束并清空”，都会失去当前连接。</p>
+
+      <h2>技术细节</h2>
+      <p>密钥协商使用 ECDH P-256；会话密钥使用 HKDF-SHA-256 派生；消息使用 AES-256-GCM 加密并认证。每条消息使用新的 96 位随机 IV 和随机消息 ID，并绑定当前会话 ID。当前页面还会在内存中拒绝重复消息 ID，以降低误重放风险。</p>
+    </section>
+
+    <footer class="footer">
+      <label><input id="autoClear" type="checkbox" checked> 10 分钟没有操作时自动结束连接并清空</label>
+      <span id="runtimeStatus" role="status" aria-live="polite">正在准备本机密钥…</span>
+    </footer>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
