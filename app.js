@@ -47,6 +47,13 @@ function setStatus(message, error = false) {
   el.style.fontWeight = error ? '800' : '';
 }
 
+function setPeerConnectionError(message = '') {
+  const el = $('peerConnectionError');
+  el.textContent = message;
+  el.hidden = !message;
+  $('peerConnectionCode').setAttribute('aria-invalid', message ? 'true' : 'false');
+}
+
 function showToast(message, error = false) {
   clearTimeout(toastTimer);
   document.querySelector('.toast')?.remove();
@@ -63,6 +70,12 @@ function setBusy(button, busy, busyText) {
   button.textContent = busy ? busyText : button.dataset.normalText;
 }
 
+function baseConnectionStatus() {
+  if (state.verified) return '安全连接已建立，可以发送和打开消息';
+  if (state.connected) return '等待双方核对数字';
+  return '等待建立连接';
+}
+
 function switchTab(target) {
   for (const tab of document.querySelectorAll('.tab')) {
     tab.classList.toggle('active', tab.dataset.tab === target);
@@ -72,11 +85,13 @@ function switchTab(target) {
     panel.hidden = !active;
     panel.classList.toggle('active', active);
   }
+  setStatus(baseConnectionStatus());
   resetIdleTimer();
 }
 
 function renderState(nextState) {
   state = { ...state, ...nextState };
+  setPeerConnectionError();
   if (state.connectionCode) $('myConnectionCode').value = state.connectionCode;
 
   const waitingVerify = state.connected && !state.verified;
@@ -160,10 +175,27 @@ $('plaintext').addEventListener('input', () => {
   $('plainCount').textContent = `${$('plaintext').value.length.toLocaleString()} 字符`;
 });
 
+$('peerConnectionCode').addEventListener('input', () => {
+  if (!$('peerConnectionError').hidden) setPeerConnectionError();
+});
+
 $('connectBtn').addEventListener('click', async () => {
   const button = $('connectBtn');
   const peerConnectionCode = $('peerConnectionCode').value.trim();
-  if (!peerConnectionCode) return showToast('请先粘贴对方的连接码', true);
+  if (!peerConnectionCode) {
+    const message = '请先粘贴对方的完整连接码。';
+    setPeerConnectionError(message);
+    $('peerConnectionCode').focus();
+    return;
+  }
+  if (!peerConnectionCode.startsWith('OSC2.')) {
+    const message = '连接码格式不正确。请重新粘贴以 OSC2. 开头的完整连接码。';
+    setPeerConnectionError(message);
+    setStatus(baseConnectionStatus());
+    $('peerConnectionCode').focus();
+    return;
+  }
+  setPeerConnectionError();
   setBusy(button, true, '正在计算共同钥匙…');
   setStatus('正在使用双方的连接信息计算共同会话钥匙…');
   try {
@@ -175,8 +207,9 @@ $('connectBtn').addEventListener('click', async () => {
     const message = error.message.includes('自己的连接码')
       ? '这是你自己的连接码。请粘贴对方页面上的连接码。'
       : '无法识别这段连接码。请让对方重新完整复制。';
-    showToast(message, true);
-    setStatus(message, true);
+    setPeerConnectionError(message);
+    setStatus(baseConnectionStatus());
+    $('peerConnectionCode').focus();
   } finally {
     setBusy(button, false);
   }

@@ -11,6 +11,12 @@ html, body { min-height: 100%; }
 body { margin: 0; background: var(--white); color: var(--black); }
 button, textarea, input { font: inherit; }
 button { -webkit-tap-highlight-color: transparent; }
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid var(--black);
+  outline-offset: 3px;
+}
 
 .shell {
   width: min(980px, calc(100% - 32px));
@@ -55,13 +61,18 @@ p { line-height: 1.65; }
   border: 0;
   border-right: 1px solid var(--black);
   background: var(--white);
-  color: var(--black);
+  color: var(--mid);
   cursor: pointer;
-  font-weight: 700;
+  font-weight: 600;
 }
 .tab:last-child { border-right: 0; }
-.tab:hover { background: var(--light); }
-.tab.active { background: var(--black); color: var(--white); }
+.tab:hover { background: var(--light); color: var(--black); }
+.tab.active {
+  background: #e6e6e6;
+  color: var(--black);
+  font-weight: 900;
+  box-shadow: inset 0 -5px 0 var(--black);
+}
 
 .panel {
   border: 2px solid var(--black);
@@ -88,6 +99,56 @@ p { line-height: 1.65; }
 .status-box.connected span { color: var(--white); }
 .connection-guard { display: grid; gap: 4px; margin-bottom: 20px; }
 .connection-guard[hidden] { display: none; }
+
+.connection-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  align-items: stretch;
+}
+.connection-grid .step-block {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--black);
+  padding: 20px;
+}
+.connection-grid .button.wide { margin-top: auto; }
+
+.code-copy-box {
+  margin-top: 12px;
+  border: 2px solid var(--black);
+  background: var(--light);
+}
+.code-copy-head {
+  min-height: 40px;
+  padding: 4px 8px 4px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid var(--black);
+}
+.compact-action {
+  min-height: 34px;
+  padding: 5px 10px;
+  flex: 0 0 auto;
+}
+.code-copy-box .code-input {
+  margin-top: 0;
+  border: 0;
+  background: var(--white);
+  resize: none;
+}
+.field-error {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-left: 4px solid var(--black);
+  background: var(--light);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
 
 .step-block {
   padding: 24px 0;
@@ -128,7 +189,7 @@ p { line-height: 1.65; }
 }
 .code-input:focus, .message-input:focus { outline: 3px solid var(--black); outline-offset: 2px; }
 .code-input { min-height: 180px; font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 12px; word-break: break-all; }
-.code-input.compact { min-height: 132px; }
+.code-input.compact { min-height: 96px; }
 .message-input { min-height: 180px; }
 .code-input[readonly], .message-input[readonly] { background: var(--light); }
 
@@ -150,6 +211,8 @@ p { line-height: 1.65; }
 .button.primary { background: var(--black); color: var(--white); }
 .button.primary:hover:not(:disabled) { background: var(--black); text-decoration: underline; }
 .button.secondary { background: var(--white); color: var(--black); }
+.button.danger { border-color: #a31313; color: #8f1111; }
+.button.danger:hover:not(:disabled) { background: #fff2f2; }
 .button.wide { width: 100%; min-height: 54px; margin-top: 12px; font-size: 17px; }
 
 .verification-code {
@@ -194,7 +257,19 @@ p { line-height: 1.65; }
   font-size: 13px;
   flex-wrap: wrap;
 }
-.footer input { accent-color: var(--black); }
+.footer label {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  gap: 9px;
+  cursor: pointer;
+}
+.footer input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--black);
+}
 
 .toast {
   position: fixed;
@@ -213,6 +288,8 @@ p { line-height: 1.65; }
 @media (max-width: 760px) {
   .shell { width: calc(100% - 20px); padding-top: 16px; }
   .site-header, .result-header { flex-direction: column; align-items: stretch; }
+  .connection-grid { grid-template-columns: 1fr; gap: 0; }
+  .connection-grid .step-block { border-width: 1px 0; padding: 22px 0; }
   .tabs { grid-template-columns: 1fr 1fr; }
   .tab { border-bottom: 1px solid var(--black); }
   .tab:nth-child(2) { border-right: 0; }

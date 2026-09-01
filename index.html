@@ -16,7 +16,7 @@
         <h1>秘密消息</h1>
         <p>先和对方建立一次安全连接。连接完成后，后续消息都使用同一把本机会话钥匙加密。</p>
       </div>
-      <button id="clearAll" class="button secondary" type="button">结束并清空</button>
+      <button id="clearAll" class="button secondary danger" type="button">结束并清空</button>
     </header>
 
     <div class="privacy-line">
@@ -41,16 +41,24 @@
         <span id="connectionStatusText">先把你的连接码发给对方。</span>
       </div>
 
-      <div class="step-block">
-        <div class="step-title"><span class="step">1</span><div><h3>把你的连接码发给对方</h3><p>这段内容可以通过微信、邮件或其他不受信任的信道发送。它不包含你的私钥。</p></div></div>
-        <textarea id="myConnectionCode" class="code-input compact" readonly spellcheck="false" placeholder="正在生成连接码…"></textarea>
-        <button class="button primary wide" type="button" data-copy="myConnectionCode">复制我的连接码</button>
-      </div>
+      <div class="connection-grid">
+        <div class="step-block">
+          <div class="step-title"><span class="step">1</span><div><h3>把你的连接码发给对方</h3><p>这段内容可以通过微信、邮件或其他不受信任的信道发送。它不包含你的私钥。</p></div></div>
+          <div class="code-copy-box">
+            <div class="code-copy-head">
+              <strong>我的连接码</strong>
+              <button class="button secondary compact-action" type="button" data-copy="myConnectionCode">复制连接码</button>
+            </div>
+            <textarea id="myConnectionCode" class="code-input compact" readonly spellcheck="false" aria-label="我的连接码" placeholder="正在生成连接码…"></textarea>
+          </div>
+        </div>
 
-      <div class="step-block">
-        <div class="step-title"><span class="step">2</span><div><h3>粘贴对方的连接码</h3><p>把对方发给你的整段连接码粘贴进来。</p></div></div>
-        <textarea id="peerConnectionCode" class="code-input compact" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="把对方的连接码完整粘贴在这里"></textarea>
-        <button id="connectBtn" class="button primary wide" type="button">计算共同会话钥匙</button>
+        <div class="step-block">
+          <div class="step-title"><span class="step">2</span><div><h3>粘贴对方的连接码</h3><p>把对方发给你的整段连接码粘贴进来。</p></div></div>
+          <textarea id="peerConnectionCode" class="code-input compact" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="peerConnectionError" placeholder="把对方的连接码完整粘贴在这里"></textarea>
+          <p id="peerConnectionError" class="field-error" role="alert" hidden></p>
+          <button id="connectBtn" class="button primary wide" type="button">计算共同会话钥匙</button>
+        </div>
       </div>
 
       <div class="step-block" id="verifyStep" hidden>
@@ -77,7 +85,7 @@
 
       <div class="connection-guard" id="sendGuard">
         <strong>还不能发送</strong>
-        <span>请先到“建立连接”完成数字核对。</span>
+        <span>发送前，请先在“建立连接”页完成双方连接码交换和数字核对。</span>
       </div>
 
       <div id="sendContent">
@@ -104,7 +112,7 @@
 
       <div class="connection-guard" id="receiveGuard">
         <strong>还不能打开</strong>
-        <span>请先到“建立连接”完成数字核对。</span>
+        <span>打开消息前，请先建立并核对安全连接，确认双方共享的是同一次会话。</span>
       </div>
 
       <div id="receiveContent">
