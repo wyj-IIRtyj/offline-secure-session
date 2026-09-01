@@ -8,7 +8,9 @@
 
 ## 在线使用
 
-GitHub Pages：部署完成后可直接打开项目 Pages 地址使用。
+**立即使用：<https://wyj-iirtyj.github.io/offline-secure-session/>**
+
+源码仓库：<https://github.com/wyj-IIRtyj/offline-secure-session>
 
 该网页本身不依赖任何网络 API、CDN、远程字体或第三方脚本。即使通过 GitHub Pages 加载，页面加载完成后的密码学操作全部在本机完成。
 
