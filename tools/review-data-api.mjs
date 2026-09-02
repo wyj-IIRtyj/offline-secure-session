@@ -29,13 +29,15 @@ export class ReviewPeerDataService {
           returns: ['verification_code', 'session_id'],
         },
         peer_encrypt_message: {
-          purpose: 'Return a ciphertext produced by the caller-side peer for receive-flow testing.',
-          required_context: ['fixture_id', 'reviewer_connection_code', 'plaintext'],
+          purpose: 'Return a ciphertext produced by the already-verified caller-side peer session.',
+          required_context: ['fixture_id', 'plaintext'],
+          prerequisite: 'peer_verification must have succeeded for this fixture_id',
           returns: ['ciphertext'],
         },
         peer_decrypt_message: {
-          purpose: 'Open ciphertext produced by the reviewed UI and return caller-side plaintext.',
-          required_context: ['fixture_id', 'reviewer_connection_code', 'ciphertext'],
+          purpose: 'Open reviewed-UI ciphertext in the already-verified caller-side peer session.',
+          required_context: ['fixture_id', 'ciphertext'],
+          prerequisite: 'peer_verification must have succeeded for this fixture_id',
           returns: ['plaintext'],
         },
       },
@@ -71,14 +73,14 @@ export class ReviewPeerDataService {
     }
 
     if (requestType === 'peer_encrypt_message') {
-      const session = await this.#sessionFor(fixture, context.reviewer_connection_code);
+      const session = this.#verifiedSession(fixture);
       const plaintext = String(context.plaintext ?? '');
       if (!plaintext) throw new Error('plaintext is required');
       return { ciphertext: await encryptSessionMessage(session, plaintext) };
     }
 
     if (requestType === 'peer_decrypt_message') {
-      const session = await this.#sessionFor(fixture, context.reviewer_connection_code);
+      const session = this.#verifiedSession(fixture);
       const ciphertext = String(context.ciphertext ?? '');
       if (!ciphertext) throw new Error('ciphertext is required');
       const opened = await decryptSessionMessage(session, ciphertext);
@@ -86,6 +88,13 @@ export class ReviewPeerDataService {
     }
 
     throw new Error(`unsupported request_type: ${requestType}`);
+  }
+
+  #verifiedSession(fixture) {
+    if (!fixture.session) {
+      throw new Error('peer_verification must succeed before message integration requests');
+    }
+    return fixture.session;
   }
 
   async #sessionFor(fixture, reviewerConnectionCode) {

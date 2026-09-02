@@ -32,7 +32,6 @@ test('caller data service supplies real peer data without exposing control surfa
 
   const incoming = await service.request('peer_encrypt_message', {
     fixture_id: peer.fixture_id,
-    reviewer_connection_code: reviewerIdentity.connectionCode,
     plaintext: '来自 caller data API 的消息',
   });
   const reviewerOpened = await decryptSessionMessage(reviewerSession, incoming.ciphertext);
@@ -41,10 +40,21 @@ test('caller data service supplies real peer data without exposing control surfa
   const outgoing = await encryptSessionMessage(reviewerSession, 'reviewed UI outgoing payload');
   const peerOpened = await service.request('peer_decrypt_message', {
     fixture_id: peer.fixture_id,
-    reviewer_connection_code: reviewerIdentity.connectionCode,
     ciphertext: outgoing,
   });
   assert.equal(peerOpened.plaintext, 'reviewed UI outgoing payload');
+});
+
+test('message integration requests require peer verification first', async () => {
+  const service = new ReviewPeerDataService();
+  const peer = await service.request('peer_connection_code', {});
+  await assert.rejects(
+    service.request('peer_encrypt_message', {
+      fixture_id: peer.fixture_id,
+      plaintext: 'not-yet-verified',
+    }),
+    /peer_verification must succeed/,
+  );
 });
 
 test('review data HTTP API exposes describe/request JSON only', async (t) => {
