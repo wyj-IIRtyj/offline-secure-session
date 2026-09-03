@@ -1,3 +1,5 @@
+import { TRANSLATIONS } from './i18n.js';
+
 const $ = (id) => document.getElementById(id);
 const MAX_TEXT_CHARS = 10_000_000;
 const IDLE_MS = 10 * 60 * 1000;
@@ -7,12 +9,60 @@ let requestId = 0;
 let pending = new Map();
 let idleTimer;
 let toastTimer;
+let currentLang = 'zh';
+
 let state = {
   connectionCode: '',
   connected: false,
   verified: false,
   verificationCode: '',
 };
+
+function getInitialLang() {
+  try {
+    const saved = localStorage.getItem('preferred_lang');
+    if (saved && TRANSLATIONS[saved]) return saved;
+  } catch {}
+  const navLang = (navigator.language || '').toLowerCase();
+  if (navLang.startsWith('ja')) return 'ja';
+  if (navLang.startsWith('zh')) return 'zh';
+  return 'en';
+}
+
+function t(key, vars = {}) {
+  let text = TRANSLATIONS[currentLang]?.[key] ?? TRANSLATIONS.zh[key] ?? key;
+  for (const [k, v] of Object.entries(vars)) {
+    text = text.replace(`{${k}}`, v);
+  }
+  return text;
+}
+
+function setLanguage(lang) {
+  if (!TRANSLATIONS[lang]) return;
+  currentLang = lang;
+  try {
+    localStorage.setItem('preferred_lang', lang);
+  } catch {}
+  document.documentElement.lang = lang === 'zh' ? 'zh-CN' : lang;
+  document.title = t('meta_title');
+
+  for (const btn of document.querySelectorAll('.lang-btn')) {
+    btn.classList.toggle('active', btn.dataset.lang === lang);
+  }
+
+  for (const el of document.querySelectorAll('[data-i18n]')) {
+    el.textContent = t(el.dataset.i18n);
+  }
+  for (const el of document.querySelectorAll('[data-i18n-html]')) {
+    el.innerHTML = t(el.dataset.i18nHtml);
+  }
+  for (const el of document.querySelectorAll('[data-i18n-placeholder]')) {
+    el.placeholder = t(el.dataset.i18nPlaceholder);
+  }
+
+  updatePlainCount();
+  renderState();
+}
 
 function createWorker() {
   worker?.terminate();
@@ -29,7 +79,7 @@ function createWorker() {
   worker.onerror = () => {
     for (const { reject } of pending.values()) reject(new Error('本机计算出现问题'));
     pending.clear();
-    setStatus('本机计算出现问题，请刷新页面后再试', true);
+    setStatus(t('runtime_init_failed'), true);
   };
 }
 
@@ -54,7 +104,8 @@ function setPeerConnectionError(message = '') {
   $('peerConnectionCode').setAttribute('aria-invalid', message ? 'true' : 'false');
 }
 
-function showToast(message, error = false) {
+function showToast(messageKeyOrText, error = false, isKey = true) {
+  const message = isKey ? t(messageKeyOrText) : messageKeyOrText;
   clearTimeout(toastTimer);
   document.querySelector('.toast')?.remove();
   const el = document.createElement('div');
@@ -64,16 +115,25 @@ function showToast(message, error = false) {
   toastTimer = setTimeout(() => el.remove(), 3600);
 }
 
-function setBusy(button, busy, busyText) {
-  if (!button.dataset.normalText) button.dataset.normalText = button.textContent;
-  button.disabled = busy;
-  button.textContent = busy ? busyText : button.dataset.normalText;
+function setBusy(button, busy, busyTextKey) {
+  if (busy) {
+    if (!button.dataset.normalKey) {
+      button.dataset.normalKey = button.dataset.i18n || '';
+    }
+    button.disabled = true;
+    button.textContent = t(busyTextKey);
+  } else {
+    button.disabled = false;
+    if (button.dataset.normalKey) {
+      button.textContent = t(button.dataset.normalKey);
+    }
+  }
 }
 
 function baseConnectionStatus() {
-  if (state.verified) return '安全连接已建立，可以发送和打开消息';
-  if (state.connected) return '等待双方核对数字';
-  return '等待建立连接';
+  if (state.verified) return t('runtime_ready');
+  if (state.connected) return t('runtime_waiting_verify');
+  return t('runtime_waiting_connect');
 }
 
 function switchTab(target) {
@@ -89,7 +149,7 @@ function switchTab(target) {
   resetIdleTimer();
 }
 
-function renderState(nextState) {
+function renderState(nextState = {}) {
   state = { ...state, ...nextState };
   setPeerConnectionError();
   if (state.connectionCode) $('myConnectionCode').value = state.connectionCode;
@@ -102,17 +162,17 @@ function renderState(nextState) {
   const box = $('connectionStatusBox');
   box.classList.toggle('connected', state.verified);
   if (state.verified) {
-    $('connectionStatusTitle').textContent = '安全连接已建立';
-    $('connectionStatusText').textContent = '核对完成。当前页面已经持有双方共同的会话钥匙。';
-    setStatus('安全连接已建立，可以发送和打开消息');
+    $('connectionStatusTitle').textContent = t('status_connected_title');
+    $('connectionStatusText').textContent = t('status_connected_desc');
+    setStatus(t('runtime_ready'));
   } else if (state.connected) {
-    $('connectionStatusTitle').textContent = '已经算出共同会话钥匙，等待核对';
-    $('connectionStatusText').textContent = '在核对数字完成之前，页面不会允许加密或解密消息。';
-    setStatus('等待双方核对数字');
+    $('connectionStatusTitle').textContent = t('status_waiting_verify_title');
+    $('connectionStatusText').textContent = t('status_waiting_verify_desc');
+    setStatus(t('runtime_waiting_verify'));
   } else {
-    $('connectionStatusTitle').textContent = '还没有连接';
-    $('connectionStatusText').textContent = '先把你的连接码发给对方，再粘贴对方的连接码。';
-    setStatus('等待建立连接');
+    $('connectionStatusTitle').textContent = t('status_not_connected_title');
+    $('connectionStatusText').textContent = t('status_not_connected_desc');
+    setStatus(t('runtime_waiting_connect'));
   }
 
   $('sendGuard').hidden = state.verified;
@@ -125,7 +185,12 @@ function clearMessageFields() {
   for (const id of ['peerConnectionCode', 'plaintext', 'ciphertext', 'receivedCiphertext', 'decryptedText']) {
     $(id).value = '';
   }
-  $('plainCount').textContent = '0 字符';
+  updatePlainCount();
+}
+
+function updatePlainCount() {
+  const len = $('plaintext')?.value?.length ?? 0;
+  $('plainCount').textContent = t('plain_count', { count: len.toLocaleString() });
 }
 
 async function resetEverything({ notify = true } = {}) {
@@ -136,9 +201,9 @@ async function resetEverything({ notify = true } = {}) {
   try {
     const initial = await rpc('init');
     renderState(initial);
-    if (notify) showToast('当前连接已经结束，新的本机连接码已生成');
+    if (notify) showToast('toast_reset_done');
   } catch {
-    setStatus('无法生成本机连接信息，请刷新页面', true);
+    setStatus(t('runtime_init_failed'), true);
   }
   resetIdleTimer();
 }
@@ -151,15 +216,15 @@ function resetIdleTimer() {
 
 async function copyFrom(id) {
   const value = $(id)?.value ?? '';
-  if (!value) return showToast('没有可复制的内容', true);
+  if (!value) return showToast('toast_no_copy_content', true);
   try {
     await navigator.clipboard.writeText(value);
-    showToast('已复制');
+    showToast('toast_copied');
   } catch {
     const el = $(id);
     el.focus();
     el.select();
-    showToast('无法自动复制，文字已经选中，请手动复制', true);
+    showToast('toast_manual_copy', true);
   }
 }
 
@@ -171,9 +236,11 @@ for (const button of document.querySelectorAll('[data-copy]')) {
   button.addEventListener('click', () => copyFrom(button.dataset.copy));
 }
 
-$('plaintext').addEventListener('input', () => {
-  $('plainCount').textContent = `${$('plaintext').value.length.toLocaleString()} 字符`;
-});
+for (const btn of document.querySelectorAll('.lang-btn')) {
+  btn.addEventListener('click', () => setLanguage(btn.dataset.lang));
+}
+
+$('plaintext').addEventListener('input', updatePlainCount);
 
 $('peerConnectionCode').addEventListener('input', () => {
   if (!$('peerConnectionError').hidden) setPeerConnectionError();
@@ -183,30 +250,30 @@ $('connectBtn').addEventListener('click', async () => {
   const button = $('connectBtn');
   const peerConnectionCode = $('peerConnectionCode').value.trim();
   if (!peerConnectionCode) {
-    const message = '请先粘贴对方的完整连接码。';
+    const message = t('err_empty_peer_code');
     setPeerConnectionError(message);
     $('peerConnectionCode').focus();
     return;
   }
   if (!peerConnectionCode.startsWith('OSC2.')) {
-    const message = '连接码格式不正确。请重新粘贴以 OSC2. 开头的完整连接码。';
+    const message = t('err_invalid_peer_code_prefix');
     setPeerConnectionError(message);
     setStatus(baseConnectionStatus());
     $('peerConnectionCode').focus();
     return;
   }
   setPeerConnectionError();
-  setBusy(button, true, '正在计算共同钥匙…');
-  setStatus('正在使用双方的连接信息计算共同会话钥匙…');
+  setBusy(button, true, 'busy_calculating');
+  setStatus(t('runtime_calc_shared'));
   try {
     const nextState = await rpc('connect', { peerConnectionCode });
     renderState(nextState);
     $('verifyStep').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    showToast('共同会话钥匙已经算出。现在必须和对方核对数字。');
+    showToast('toast_shared_derived');
   } catch (error) {
     const message = error.message.includes('自己的连接码')
-      ? '这是你自己的连接码。请粘贴对方页面上的连接码。'
-      : '无法识别这段连接码。请让对方重新完整复制。';
+      ? t('err_self_peer_code')
+      : t('err_unrecognized_peer_code');
     setPeerConnectionError(message);
     setStatus(baseConnectionStatus());
     $('peerConnectionCode').focus();
@@ -217,13 +284,13 @@ $('connectBtn').addEventListener('click', async () => {
 
 $('verifyBtn').addEventListener('click', async () => {
   const button = $('verifyBtn');
-  setBusy(button, true, '正在确认…');
+  setBusy(button, true, 'busy_verifying');
   try {
     const nextState = await rpc('verify');
     renderState(nextState);
-    showToast('核对完成。现在双方可以使用这次连接交换秘密消息。');
+    showToast('toast_verified');
   } catch {
-    showToast('当前连接状态不正确，请重新建立连接', true);
+    showToast('toast_verify_invalid_state', true);
   } finally {
     setBusy(button, false);
   }
@@ -233,15 +300,15 @@ $('goSendBtn').addEventListener('click', () => switchTab('send'));
 
 $('newConnectionBtn').addEventListener('click', async () => {
   const button = $('newConnectionBtn');
-  setBusy(button, true, '正在重新开始…');
+  setBusy(button, true, 'busy_restarting');
   clearMessageFields();
   try {
     const nextState = await rpc('reset');
     renderState(nextState);
     switchTab('connect');
-    showToast('已生成新的连接码，旧会话钥匙已经丢弃');
+    showToast('toast_new_code_generated');
   } catch {
-    showToast('重新开始失败，请刷新页面', true);
+    showToast('toast_reset_failed', true);
   } finally {
     setBusy(button, false);
   }
@@ -250,18 +317,18 @@ $('newConnectionBtn').addEventListener('click', async () => {
 $('encryptBtn').addEventListener('click', async () => {
   const button = $('encryptBtn');
   const plaintext = $('plaintext').value;
-  if (!state.verified) return showToast('请先完成安全连接和数字核对', true);
-  if (!plaintext) return showToast('请先输入要发送的消息', true);
-  if (plaintext.length > MAX_TEXT_CHARS) return showToast('消息过大，请分成几条发送', true);
-  setBusy(button, true, '正在生成密文…');
-  setStatus('正在使用当前会话钥匙加密…');
+  if (!state.verified) return showToast('toast_need_verify', true);
+  if (!plaintext) return showToast('toast_need_message', true);
+  if (plaintext.length > MAX_TEXT_CHARS) return showToast('toast_message_too_large', true);
+  setBusy(button, true, 'busy_encrypting');
+  setStatus(t('runtime_encrypting'));
   try {
     $('ciphertext').value = await rpc('encrypt', { plaintext });
-    setStatus('密文已生成');
-    showToast('完成。把下面的密文完整发给对方。');
+    setStatus(t('runtime_encrypted'));
+    showToast('toast_ciphertext_ready');
   } catch {
-    showToast('无法生成密文，请重新建立连接后再试', true);
-    setStatus('加密失败', true);
+    showToast('toast_encrypt_error', true);
+    setStatus(t('runtime_encrypt_failed'), true);
   } finally {
     setBusy(button, false);
   }
@@ -270,22 +337,22 @@ $('encryptBtn').addEventListener('click', async () => {
 $('decryptBtn').addEventListener('click', async () => {
   const button = $('decryptBtn');
   const envelope = $('receivedCiphertext').value.trim();
-  if (!state.verified) return showToast('请先完成安全连接和数字核对', true);
-  if (!envelope) return showToast('请先粘贴对方发来的密文', true);
-  if (envelope.length > MAX_TEXT_CHARS * 2) return showToast('密文过大，请确认复制内容是否正确', true);
-  setBusy(button, true, '正在打开…');
-  setStatus('正在使用当前会话钥匙验证并打开消息…');
+  if (!state.verified) return showToast('toast_need_verify', true);
+  if (!envelope) return showToast('toast_need_ciphertext', true);
+  if (envelope.length > MAX_TEXT_CHARS * 2) return showToast('toast_ciphertext_too_large', true);
+  setBusy(button, true, 'busy_decrypting');
+  setStatus(t('runtime_decrypting'));
   try {
     $('decryptedText').value = await rpc('decrypt', { envelope });
-    setStatus('消息已打开');
-    showToast('消息已经安全打开');
+    setStatus(t('runtime_decrypted'));
+    showToast('toast_decrypt_success');
   } catch (error) {
     $('decryptedText').value = '';
-    let message = '打不开这条消息。它可能来自其他连接，或者内容被修改了。';
-    if (error.message.includes('已经打开过')) message = '这条密文已经在当前页面打开过一次。';
-    if (error.message.includes('不属于当前连接')) message = '这条密文不是当前安全连接生成的。';
-    showToast(message, true);
-    setStatus(message, true);
+    let messageKey = 'toast_decrypt_failed';
+    if (error.message.includes('已经打开过')) messageKey = 'toast_decrypt_replayed';
+    if (error.message.includes('不属于当前连接')) messageKey = 'toast_decrypt_mismatched';
+    showToast(messageKey, true);
+    setStatus(t(messageKey), true);
   } finally {
     setBusy(button, false);
   }
@@ -302,13 +369,15 @@ window.addEventListener('pagehide', () => {
 });
 
 if (!globalThis.crypto?.subtle || !globalThis.Worker) {
-  setStatus('这个浏览器太旧，无法运行此工具。请换用较新的浏览器。', true);
+  setStatus(t('runtime_old_browser'), true);
 } else {
+  // Initialize language first
+  setLanguage(getInitialLang());
   createWorker();
   rpc('init')
     .then((initial) => {
       renderState(initial);
       resetIdleTimer();
     })
-    .catch(() => setStatus('无法生成本机连接信息，请刷新页面', true));
+    .catch(() => setStatus(t('runtime_init_failed'), true));
 }
